@@ -10,43 +10,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Checkout the code from GitHub
-    - name: Checkout code
-      uses: actions/checkout@v3
+      # Step 1: Checkout the code from GitHub
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    # Step 2: Set up Node.js
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18.20.4'  # Matching your local version
-        cache: 'npm'
+      # Step 2: Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.20.4'  # Matching your local version
+          cache: 'npm'
 
-    # Step 3: Install dependencies
-    - name: Install dependencies
-      run: |
-        npm ci  # Uses package-lock.json for deterministic installs
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          npm ci  # Uses package-lock.json for deterministic installs
 
-    # Step 4: Run tests (optional)
-    # If you have tests, you can add this step
-    # - name: Run tests
-    #   run: npm test
+      # Step 4: Deploy to the server (using SSH and PM2)
+      - name: Deploy to server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}  # Ensure this secret is correctly configured
+          SERVER_IP: ${{ secrets.SERVER_IP }}               # Ensure this secret is correctly configured
+        run: |
+          echo "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
 
-    # Step 5: Deploy to the server (using SSH and PM2)
-    - name: Deploy to server
-      env:
-        SSH_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}  # Set your private key in GitHub secrets
-        SERVER_IP: ${{ secrets.SERVER_IP }}              # Set your server IP in GitHub secrets
-     run: |
-        echo "$EC2_PRIVATE_KEY" > private_key.pem
-        chmod 600 private_key.pem
+          # SSH into the server and deploy the code
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << 'EOF'
+            cd /home/ubuntu/CI-CD-sample
+            git pull origin main
+            npm ci
+            pm2 restart index.js
+          EOF
 
-        # SSH into the server and deploy the code
-        ssh -i EC2_PRIVATE_KEY.pem -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << 'EOF'
-          cd /home/ubuntu/CI-CD-sample
-          git pull origin main
-          npm ci
-          pm2 restart index.js
-        EOF
-
-        # Remove the private key file after use
-        rm -f private_key.pem
+          # Remove the private key file after use
+          rm -f private_key.pem
