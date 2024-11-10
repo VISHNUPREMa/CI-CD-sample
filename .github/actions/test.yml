@@ -1,32 +1,52 @@
-name: Deploy to EC2
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - main  # Change to your deployment branch if different
+      - main  # Trigger this workflow on push to the main branch
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
+    # Step 1: Checkout the code from GitHub
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up SSH
-      uses: webfactory/ssh-agent@v0.7.0
+    # Step 2: Set up Node.js
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
       with:
-        ssh-private-key: ${{ secrets.EC2_PRIVATE_KEY }}
+        node-version: '18.20.4'  # Matching your local version
+        cache: 'npm'
 
-    - name: Copy files to EC2
+    # Step 3: Install dependencies
+    - name: Install dependencies
       run: |
-        scp -o StrictHostKeyChecking=no -r ./ your-ec2-user@your-ec2-ip:/path/to/your/app
+        npm ci  # Uses package-lock.json for deterministic installs
 
-    - name: SSH and deploy on EC2
-      run: |
-        ssh -o StrictHostKeyChecking=no your-ec2-user@your-ec2-ip << 'EOF'
-        cd /path/to/your/app
-        # Run your deployment commands, e.g., npm install, restart services
-        npm install
-        pm2 restart app
+    # Step 4: Run tests (optional)
+    # If you have tests, you can add this step
+    # - name: Run tests
+    #   run: npm test
+
+    # Step 5: Deploy to the server (using SSH and PM2)
+    - name: Deploy to server
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}  # Set your private key in GitHub secrets
+        SERVER_IP: ${{ secrets.SERVER_IP }}              # Set your server IP in GitHub secrets
+     run: |
+        echo "$EC2_PRIVATE_KEY" > private_key.pem
+        chmod 600 private_key.pem
+
+        # SSH into the server and deploy the code
+        ssh -i EC2_PRIVATE_KEY.pem -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << 'EOF'
+          cd /home/ubuntu/CI-CD-sample
+          git pull origin main
+          npm ci
+          pm2 restart index.js
         EOF
+
+        # Remove the private key file after use
+        rm -f private_key.pem
