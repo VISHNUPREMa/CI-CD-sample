@@ -1,0 +1,32 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main  # Change to your deployment branch if different
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.EC2_PRIVATE_KEY }}
+
+    - name: Copy files to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no -r ./ your-ec2-user@your-ec2-ip:/path/to/your/app
+
+    - name: SSH and deploy on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no your-ec2-user@your-ec2-ip << 'EOF'
+        cd /path/to/your/app
+        # Run your deployment commands, e.g., npm install, restart services
+        npm install
+        pm2 restart app
+        EOF
